@@ -68,6 +68,7 @@ EXPORT_SYMBOL(execve);
 EXPORT_SYMBOL(getdents64);
 
 SYMBOL_ALIAS(exit, _exit);
+SYMBOL_ALIAS(openat64, openat);
 
 #if defined(__LP64__)
 
