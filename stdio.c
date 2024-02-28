@@ -140,6 +140,11 @@ FILE *funopen(const void* cookie,
     return (FILE *) fp;
 }
 
+int ferror(FILE *stream) {
+    // We don't report any errors
+    return 0;
+}
+
 #define fn_arg (fp->fd < 0 ? fp->cookie : ((void*)(intptr_t) fp->fd))
 
 int fclose(FILE *stream) {
@@ -211,6 +216,7 @@ static void file_putc(void *data, char ch) {
     }
 }
 
+__attribute__((weak))
 int vfprintf(FILE *stream, const char *format, va_list arg) {
     struct file_putp data;
     data.fp = stream;
@@ -219,7 +225,7 @@ int vfprintf(FILE *stream, const char *format, va_list arg) {
     return data.len;
 }
 
-__asm__(".global vsscanf \n vsscanf = tfp_vsscanf");
+__asm__(".weak vsscanf \n vsscanf = tfp_vsscanf");
 
 // {s,f}printf and sscanf family wrappers
 
