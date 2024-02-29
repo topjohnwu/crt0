@@ -10,10 +10,18 @@ void *memset(void *dst, int ch, size_t n) {
 }
 
 void *memmove(void *dst, const void *src, size_t n) {
-    return memcpy(dst, src, n);
+    if (dst < src) {
+        return memcpy(dst, src, n);
+    }
+    // Copy backwards
+    uint8_t *d = dst + n;
+    const uint8_t *s = src + n;
+    while (n--)
+        *--d = *--s;
+    return dst;
 }
 
-void *memcpy(void *dst, const void *src, size_t n) {
+void *memcpy(void * restrict dst, const void * restrict src, size_t n) {
     uint8_t *d = dst;
     const uint8_t *s = src;
     while (n--)
