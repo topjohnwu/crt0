@@ -55,6 +55,16 @@ char *strchr(const char *s, int ch) {
     return (char *) s;
 }
 
+char *strrchr(const char *s, int ch) {
+    char c = ch;
+    const char *ret = NULL;
+    do {
+        if(*s == c)
+            ret = s;
+    } while(*s++);
+    return (char *) ret;
+}
+
 int strcmp(const char *lhs, const char *rhs) {
     while (*lhs && (*lhs == *rhs)) {
         ++lhs;

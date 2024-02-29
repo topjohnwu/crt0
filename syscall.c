@@ -75,13 +75,28 @@ SYMBOL_ALIAS(openat64, openat);
 EXPORT_SYMBOL(fstat);
 EXPORT_SYMBOL(newfstatat);
 SYMBOL_ALIAS(fstatat, newfstatat);
+SYMBOL_ALIAS(lseek64, lseek);
+SYMBOL_ALIAS(ftruncate64, ftruncate);
 
 #else
 
+_syscall2(int, ftruncate64, int, i, off64_t, off);
+EXPORT_SYMBOL(ftruncate64);
 EXPORT_SYMBOL(fstat64);
 EXPORT_SYMBOL(fstatat64);
 SYMBOL_ALIAS(fstat, fstat64);
 SYMBOL_ALIAS(fstatat, fstatat64);
+
+// Source: bionic/libc/bionic/legacy_32_bit_support.cpp
+off64_t lseek64(int fd, off64_t off, int whence) {
+    off64_t result;
+    unsigned long off_hi = (unsigned long) (off >> 32);
+    unsigned long off_lo = (unsigned long) off;
+    if (sys__llseek(fd, off_hi, off_lo, &result, whence) < 0) {
+        return -1;
+    }
+    return result;
+}
 
 #endif
 
@@ -143,6 +158,10 @@ int remove(const char *path) {
         r = sys_unlinkat(AT_FDCWD, path, AT_REMOVEDIR);
     }
     return r;
+}
+
+int creat(const char *path, mode_t mode) {
+    return sys_open(path, O_WRONLY | O_CREAT | O_TRUNC, mode);
 }
 
 // Source: bionic/libc/bionic/abort.cpp

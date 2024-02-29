@@ -25,6 +25,15 @@ static char *__findenv(const char *name, int len, int *offset) {
     return (NULL);
 }
 
+char *getenv(const char *name) {
+	int offset = 0;
+	const char *np;
+
+	for (np = name; *np && *np != '='; ++np)
+		;
+	return (__findenv(name, (int)(np - name), &offset));
+}
+
 // Source: bionic/libc/upstream-openbsd/lib/libc/stdlib/setenv.c
 int setenv(const char *name, const char *value, int rewrite) {
     static char **lastenv;

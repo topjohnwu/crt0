@@ -1,6 +1,7 @@
+#include <unistd.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <unistd.h>
 #include <string.h>
 
 typedef struct file_ptr_t {
@@ -46,6 +47,30 @@ void __init_stdio(void) {
     set_fp_fd((file_ptr_t *) stderr, 2);
 }
 
+FILE *fopen(const char *path, const char *mode) {
+    int flag = 0;
+    int mode_flg = 0;
+    if (*mode == 'r') {
+        flag |= O_RDONLY;
+    } else if (*mode == 'w') {
+        flag |= O_WRONLY | O_CREAT | O_TRUNC;
+    } else if (*mode == 'a') {
+        flag |= O_WRONLY | O_CREAT | O_APPEND;
+    }
+    if (strchr(mode, 'e')) flag |= O_CLOEXEC;
+    if (strchr(mode, '+')) {
+        flag &= ~O_ACCMODE;
+        flag |= O_RDWR;
+    }
+    if (flag & O_CREAT) mode_flg = 0644;
+
+    int fd = open(path, flag, mode_flg);
+    if (fd >= 0) {
+        return fdopen(fd, mode);
+    }
+    return NULL;
+}
+
 FILE *fdopen(int fd, const char *mode __attribute__((unused))) {
     file_ptr_t *fp = malloc(sizeof(file_ptr_t));
     set_fp_fd(fp, fd);
@@ -84,6 +109,10 @@ int fputc(int ch, FILE *stream) {
     char c = ch;
     file_ptr_t *fp = (file_ptr_t *) stream;
     return fp->write_fn(fn_arg, &c, 1) >= 0 ? 0 : EOF;
+}
+
+int putchar(int ch) {
+    return fputc(ch, stdout);
 }
 
 size_t fwrite(const void* buf, size_t size, size_t count, FILE* stream) {
