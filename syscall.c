@@ -7,7 +7,11 @@
 // Some missing declarations
 static inline _syscall3(int, faccessat, int, f, const char *, p, int, m)
 _syscall2(int, umount2, const char *, t, int, f)
+#ifdef __NR_renameat
 _syscall4(int, renameat, int, o, const char *, op, int, n, const char *, np)
+#else
+_syscall5(int, renameat2, int, o, const char *, op, int, n, const char *, np, int, flag)
+#endif
 _syscall1(mode_t, umask, mode_t, mask)
 _syscall1(int, chroot, const char *, path)
 _syscall2(int, nanosleep, const struct kernel_timespec *, req, struct kernel_timespec *, rem)
@@ -45,7 +49,6 @@ EXPORT_SYMBOL(getpid);
 EXPORT_SYMBOL(chdir);
 EXPORT_SYMBOL(umount2);
 EXPORT_SYMBOL(readlinkat);
-EXPORT_SYMBOL(renameat);
 EXPORT_SYMBOL(umask);
 EXPORT_SYMBOL(chroot);
 EXPORT_SYMBOL(mount);
@@ -65,6 +68,7 @@ EXPORT_SYMBOL(readv);
 EXPORT_SYMBOL(lseek);
 EXPORT_SYMBOL(execve);
 EXPORT_SYMBOL(getdents64);
+EXPORT_SYMBOL(clock_gettime);
 
 SYMBOL_ALIAS(exit, _exit);
 SYMBOL_ALIAS(openat64, openat);
@@ -182,8 +186,20 @@ int symlink(const char *target, const char *linkpath) {
 }
 
 int rename(const char *oldpath, const char *newpath) {
+#ifdef __NR_renameat
     return sys_renameat(AT_FDCWD, oldpath, AT_FDCWD, newpath);
+#else
+    return sys_renameat2(AT_FDCWD, oldpath, AT_FDCWD, newpath, 0);
+#endif
 }
+
+#ifdef __NR_renameat
+EXPORT_SYMBOL(renameat);
+#else
+int renameat(int o, const char * op, int n, const char * np) {
+    return sys_renameat2(o, op, n, np, 0);
+}
+#endif
 
 int access(const char* path, int mode) {
     return faccessat(AT_FDCWD, path, mode, 0);
@@ -215,7 +231,11 @@ void abort() {
     // If SIGABRT is ignored or it's caught and the handler returns,
     // remove the SIGABRT signal handler and raise SIGABRT again.
     struct kernel_sigaction sa = { .sa_handler_ = SIG_DFL, .sa_flags = SA_RESTART };
+#ifdef __NR_sigaction
     sys_sigaction(SIGABRT, &sa, NULL);
+#else
+    sys_rt_sigaction(SIGABRT, &sa, NULL, sizeof(sa.sa_mask));
+#endif
 
     sys_sigprocmask(SIG_SETMASK, &mask, NULL);
     sys_raise(SIGABRT);
@@ -276,3 +296,17 @@ int open(const char *pathname, int flags, ...) {
 
     return sys_openat(AT_FDCWD, pathname, flags, mode);
 }
+
+#ifdef __riscv
+void *realloc(void *ptr, size_t size);
+
+void* reallocarray(void *ptr, size_t nmemb, size_t size) {
+    if (size && nmemb > (size_t)-1 / size) {
+        errno = ENOMEM;
+        return NULL;
+    }
+
+    return realloc(ptr, nmemb * size);
+}
+
+#endif
