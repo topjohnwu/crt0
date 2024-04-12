@@ -111,7 +111,6 @@ off64_t lseek64(int fd, off64_t off, int whence) {
 }
 
 // Source: bionic/libc/bionic/mmap.cpp
-#define PAGE_SIZE 4096
 #define MMAP2_SHIFT 12 // 2**12 == 4096
 
 void *mmap64(void* addr, size_t size, int prot, int flags, int fd, off64_t offset) {
@@ -121,7 +120,7 @@ void *mmap64(void* addr, size_t size, int prot, int flags, int fd, off64_t offse
     }
 
     // Prevent allocations large enough for `end - start` to overflow.
-    size_t rounded = __BIONIC_ALIGN(size, PAGE_SIZE);
+    size_t rounded = __BIONIC_ALIGN(size, getpagesize());
     if (rounded < size || rounded > PTRDIFF_MAX) {
         errno = ENOMEM;
         return MAP_FAILED;

@@ -1,3 +1,4 @@
+#include <sys/auxv.h>
 #include <stdlib.h>
 #include <string.h>
 #include <libgen.h>
@@ -248,6 +249,14 @@ int pthread_setspecific(pthread_key_t key, const void *value) {
     }
     key_list[key].data = (void *) value;
     return 0;
+}
+
+int getpagesize() {
+    static int sz = 0;
+    if (sz == 0) {
+        sz = getauxval(AT_PAGESZ);
+    }
+    return sz;
 }
 
 // Workaround LTO bug: https://github.com/llvm/llvm-project/issues/61101

@@ -1,4 +1,5 @@
 #include <sys/mman.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -6,7 +7,6 @@
 #define MMAP_THRESHOLD (1 << 18)  /* 256k */
 #define WORD_SZ (sizeof(void*))
 #define MIN_ALIGNMENT (2 * WORD_SZ)
-#define MAX_ALIGNMENT 4096
 
 #define CHUNK_START(p) *((void **)(p - WORD_SZ))
 #define CHUNK_SIZE(p)  *((size_t *) CHUNK_START(p))
@@ -48,7 +48,7 @@ void *memalign(size_t alignment, size_t size) {
     } block = { NULL, NULL };
 
     if (alignment < MIN_ALIGNMENT) alignment = MIN_ALIGNMENT;
-    if (alignment > MAX_ALIGNMENT) alignment = MAX_ALIGNMENT;
+    if (alignment > getpagesize()) alignment = getpagesize();
     size = align(size, MIN_ALIGNMENT);
 
     if (size >= MMAP_THRESHOLD) {
