@@ -20,7 +20,7 @@ LOCAL_SRC_FILES := \
     mem.c \
     misc.c \
     stdio.c \
-    syscall.c \
+    syscalls.c \
     bionic/dirent.cpp \
     bionic/strerror.cpp \
     bionic/syscall-$(TARGET_ARCH).S \

@@ -77,16 +77,18 @@ SYMBOL_ALIAS(lstat64, lstat);
 
 #if defined(__LP64__)
 
+_syscall3(int, fchown, int, i, uid_t, u, gid_t, g)
+EXPORT_SYMBOL(fchown);
 EXPORT_SYMBOL(fstat);
-EXPORT_SYMBOL(newfstatat);
 EXPORT_SYMBOL(mmap);
-SYMBOL_ALIAS(fstatat, newfstatat);
+SYMBOL_ALIAS(fstatat, sys_newfstatat);
 SYMBOL_ALIAS(lseek64, lseek);
 SYMBOL_ALIAS(ftruncate64, ftruncate);
 SYMBOL_ALIAS(mmap64, mmap);
 
 #else
 
+_syscall3(int, fchown32, int, i, uid_t, u, gid_t, g)
 _syscall2(int, ftruncate64, int, i, off64_t, off)
 _syscall6(void*, mmap2, void*, addr, size_t, size, int, prot, int, flag, int, fd, long, off)
 EXPORT_SYMBOL(ftruncate64);
@@ -95,6 +97,7 @@ EXPORT_SYMBOL(fstatat64);
 EXPORT_SYMBOL(mmap2);
 SYMBOL_ALIAS(fstat, fstat64);
 SYMBOL_ALIAS(fstatat, fstatat64);
+SYMBOL_ALIAS(fchown, sys_fchown32);
 
 // Source: bionic/libc/bionic/legacy_32_bit_support.cpp
 off64_t lseek64(int fd, off64_t off, int whence) {
@@ -139,10 +142,6 @@ int lstat(const char* path, struct stat *st) {
 
 int stat(const char* path, struct stat *st) {
     return fstatat(AT_FDCWD, path, st, 0);
-}
-
-int fchown(int fd, uid_t owner, gid_t group) {
-    return fchownat(fd, "", owner, group, AT_EMPTY_PATH);
 }
 
 int lchown(const char* path, uid_t uid, gid_t gid) {
