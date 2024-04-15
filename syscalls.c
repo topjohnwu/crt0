@@ -294,17 +294,3 @@ int open(const char *pathname, int flags, ...) {
 
     return sys_openat(AT_FDCWD, pathname, flags, mode);
 }
-
-#ifdef __riscv
-void *realloc(void *ptr, size_t size);
-
-void* reallocarray(void *ptr, size_t nmemb, size_t size) {
-    if (size && nmemb > (size_t)-1 / size) {
-        errno = ENOMEM;
-        return NULL;
-    }
-
-    return realloc(ptr, nmemb * size);
-}
-
-#endif

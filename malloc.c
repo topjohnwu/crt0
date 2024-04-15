@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
 #define BLOCK_SIZE (1 << 22)  /* 4M */
 #define MMAP_THRESHOLD (1 << 18)  /* 256k */
@@ -54,6 +55,10 @@ void *memalign(size_t alignment, size_t size) {
     if (size >= MMAP_THRESHOLD) {
         size_t prefix = calculate_prefix(0, alignment);
         void *chunk = sys_alloc(size + prefix);
+        if (chunk == MAP_FAILED) {
+            errno = ENOMEM;
+            return NULL;
+        }
         void *p = chunk + prefix;
         CHUNK_START(p) = chunk;
         CHUNK_SIZE(p) = size;
@@ -63,6 +68,10 @@ void *memalign(size_t alignment, size_t size) {
     size_t prefix = calculate_prefix((size_t) block.curr, alignment);
     if (block.curr == NULL || block.curr + prefix + size > block.end) {
         void *b = sys_alloc(BLOCK_SIZE);
+        if (b == MAP_FAILED) {
+            errno = ENOMEM;
+            return NULL;
+        }
         block.curr = b;
         block.end = b + BLOCK_SIZE;
         prefix = calculate_prefix((size_t) b, alignment);
@@ -88,7 +97,12 @@ void free(void *ptr) {
 }
 
 void *crt0_calloc(size_t nmemb, size_t size) {
-    return malloc(nmemb * size);
+    size_t sz;
+    if (__builtin_mul_overflow(nmemb, size, &sz)) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    return malloc(sz);
 }
 
 // For some reason calloc does not export properly
@@ -106,4 +120,13 @@ void *realloc(void *ptr, size_t size) {
     } else {
         return malloc(size);
     }
+}
+
+void *reallocarray(void *ptr, size_t nmemb, size_t size) {
+    size_t sz;
+    if (__builtin_mul_overflow(nmemb, size, &sz)) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    return realloc(ptr, sz);
 }
