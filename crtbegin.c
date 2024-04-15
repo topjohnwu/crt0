@@ -3,18 +3,15 @@
 
 char **environ;
 
-extern void _exit(int);
+extern void exit(int);
 extern void __init_stdio(void);
 
 typedef void init_func_t(int, char*[], char*[]);
-typedef void fini_func_t(void);
 
 extern init_func_t *__preinit_array_start[];
 extern init_func_t *__preinit_array_end[];
 extern init_func_t *__init_array_start[];
 extern init_func_t *__init_array_end[];
-extern fini_func_t *__fini_array_start[];
-extern fini_func_t *__fini_array_end[];
 
 static void call_array(init_func_t **start, init_func_t **end, int argc, char *argv[], char *envp[]) {
     unsigned long count = end - start;
@@ -75,7 +72,7 @@ void _start_c(long *sp) {
     call_array(__init_array_start, __init_array_end, argc, argv, envp);
 
     /* go to application */
-    _exit(__real_main(argc, argv, envp));
+    exit(__real_main(argc, argv, envp));
 }
 
 unsigned long getauxval(unsigned long type) {

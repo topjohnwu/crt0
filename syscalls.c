@@ -33,7 +33,6 @@ __asm__(".global " #from " \n " #from " = " #to)
 #define EXPORT_SYMBOL(name) \
 SYMBOL_ALIAS(name, sys_##name)
 
-EXPORT_SYMBOL(_exit);
 EXPORT_SYMBOL(openat);
 EXPORT_SYMBOL(close);
 EXPORT_SYMBOL(read);
@@ -70,7 +69,7 @@ EXPORT_SYMBOL(execve);
 EXPORT_SYMBOL(getdents64);
 EXPORT_SYMBOL(clock_gettime);
 
-SYMBOL_ALIAS(exit, _exit);
+SYMBOL_ALIAS(_exit, sys_exit_group);
 SYMBOL_ALIAS(openat64, openat);
 SYMBOL_ALIAS(stat64, stat);
 SYMBOL_ALIAS(lstat64, lstat);

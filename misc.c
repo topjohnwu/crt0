@@ -181,9 +181,46 @@ void __wrap_abort_message(const char* format, ...) {
     abort();
 }
 
-// Don't care about C++ global destructors
-int __cxa_atexit(void (*func) (void *), void * arg, void * dso_handle) {
+typedef struct at_exit_func {
+    void *arg;
+    void (*func)(void*);
+} at_exit_func;
+
+static int at_exit_cap = 0;
+static int at_exit_sz = 0;
+static at_exit_func *at_exit_list = NULL;
+
+int __cxa_atexit(void (*func)(void *), void *arg, void *dso_handle) {
+    if (at_exit_sz == at_exit_cap) {
+        at_exit_cap = at_exit_cap ? at_exit_sz * 2 : 16;
+        at_exit_list = realloc(at_exit_list, at_exit_cap * sizeof(at_exit_func));
+    }
+    at_exit_list[at_exit_sz].func = func;
+    at_exit_list[at_exit_sz].arg = arg;
+    ++at_exit_sz;
     return 0;
+}
+
+typedef void fini_func_t(void);
+
+extern fini_func_t *__fini_array_start[];
+extern fini_func_t *__fini_array_end[];
+
+void exit(int status) {
+    // Call registered at_exit functions in reverse
+    for (int i = at_exit_sz - 1; i >= 0; --i) {
+        at_exit_list[i].func(at_exit_list[i].arg);
+    }
+
+    fini_func_t** array = __fini_array_start;
+    size_t count = __fini_array_end - __fini_array_start;
+    // Call fini functions in reverse order
+    while (count-- > 0) {
+        fini_func_t* function = array[count];
+        (*function)();
+    }
+
+    _exit(status);
 }
 
 // Emulate pthread functions
