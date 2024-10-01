@@ -16,6 +16,7 @@ LOCAL_EXPORT_CFLAGS := -DUSE_CRT0
 
 LOCAL_SRC_FILES := \
     crtbegin.c \
+    fmt.c \
     malloc.c \
     mem.c \
     misc.c \

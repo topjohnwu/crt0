@@ -4,28 +4,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "tinystdio/tinystdio.h"
-
-#define MIN(a,b) ((a)<(b) ? (a) : (b))
+#include "stdio_impl.h"
 
 // Hand-rolled base FILE operations
-
-typedef struct buf_holder {
-    void *begin;
-    void *end;
-    size_t cnt;
-} buf_holder;
-
-typedef struct file_ptr {
-    int fd;
-    union {
-        void *cookie;
-        buf_holder *buf;
-    };
-    int (*read_fn)(void*, char*, int);
-    int (*write_fn)(void*, const char*, int);
-    int (*close_fn)(void*);
-} file_ptr;
 
 static int fp_read_fn(void *p, char *buf, int sz) {
     intptr_t fd = (intptr_t) p;
@@ -72,7 +53,7 @@ static int buf_write_fn(void *p, const char *buf, int sz) {
     return sz;
 }
 
-static void set_fp_fd(file_ptr *fp, int fd) {
+void setup_fd_fp(file_impl *fp, int fd) {
     fp->fd = fd;
     fp->cookie = NULL;
     fp->read_fn = fp_read_fn;
@@ -80,7 +61,7 @@ static void set_fp_fd(file_ptr *fp, int fd) {
     fp->close_fn = fp_close_fn;
 }
 
-static void set_fp_buf(file_ptr *fp, buf_holder *h) {
+void setup_buf_fp(file_impl *fp, buf_holder *h) {
     fp->fd = -1;
     fp->buf = h;
     fp->read_fn = buf_read_fn;
@@ -88,16 +69,16 @@ static void set_fp_buf(file_ptr *fp, buf_holder *h) {
     fp->close_fn = NULL;
 }
 
-static file_ptr __stdio_fp[3];
+static file_impl __stdio_fp[3];
 
 FILE* stdin  = (FILE *) &__stdio_fp[0];
 FILE* stdout = (FILE *) &__stdio_fp[1];
 FILE* stderr = (FILE *) &__stdio_fp[2];
 
 void __init_stdio(void) {
-    set_fp_fd(&__stdio_fp[0], 0);
-    set_fp_fd(&__stdio_fp[1], 1);
-    set_fp_fd(&__stdio_fp[2], 2);
+    setup_fd_fp(&__stdio_fp[0], 0);
+    setup_fd_fp(&__stdio_fp[1], 1);
+    setup_fd_fp(&__stdio_fp[2], 2);
 }
 
 FILE *fopen(const char *path, const char *mode) {
@@ -125,8 +106,8 @@ FILE *fopen(const char *path, const char *mode) {
 }
 
 FILE *fdopen(int fd, const char *mode __attribute__((unused))) {
-    file_ptr *fp = malloc(sizeof(file_ptr));
-    set_fp_fd(fp, fd);
+    file_impl *fp = malloc(sizeof(file_impl));
+    setup_fd_fp(fp, fd);
     return (FILE *) fp;
 }
 
@@ -135,7 +116,7 @@ FILE *funopen(const void* cookie,
               int (*write_fn)(void*, const char*, int),
               fpos_t (*seek_fn)(void*, fpos_t, int),
               int (*close_fn)(void*)) {
-    file_ptr *fp = malloc(sizeof(file_ptr));
+    file_impl *fp = malloc(sizeof(file_impl));
     fp->fd = -1;
     fp->cookie = (void *) cookie;
     fp->read_fn = read_fn;
@@ -152,7 +133,7 @@ int ferror(FILE *stream) {
 #define fn_arg (fp->fd < 0 ? fp->cookie : ((void*)(intptr_t) fp->fd))
 
 int fclose(FILE *stream) {
-    file_ptr *fp = (file_ptr *) stream;
+    file_impl *fp = (file_impl *) stream;
     int ret = 0;
     if (fp->close_fn)
         fp->close_fn(fn_arg);
@@ -161,13 +142,13 @@ int fclose(FILE *stream) {
 }
 
 int fileno(FILE *stream) {
-    file_ptr *fp = (file_ptr *) stream;
+    file_impl *fp = (file_impl *) stream;
     return fp->fd;
 }
 
 int fputc(int ch, FILE *stream) {
     char c = ch;
-    file_ptr *fp = (file_ptr *) stream;
+    file_impl *fp = (file_impl *) stream;
     return fp->write_fn(fn_arg, &c, 1) >= 0 ? 0 : EOF;
 }
 
@@ -176,21 +157,21 @@ int putchar(int ch) {
 }
 
 size_t fwrite(const void* buf, size_t size, size_t count, FILE* stream) {
-    file_ptr *fp = (file_ptr *) stream;
+    file_impl *fp = (file_impl *) stream;
     int len = size * count;
     int ret = fp->write_fn(fn_arg, buf, len);
     return ret == len ? count : 0;
 }
 
 int fputs(const char* s, FILE* stream) {
-    file_ptr *fp = (file_ptr *) stream;
+    file_impl *fp = (file_impl *) stream;
     size_t length = strlen(s);
     return fp->write_fn(fn_arg, s, length) == length ? 0 : EOF;
 }
 
 int fgetc(FILE *stream) {
     char ch;
-    file_ptr *fp = (file_ptr *) stream;
+    file_impl *fp = (file_impl *) stream;
     if (fp->read_fn(fn_arg, &ch, 1) == 1) {
         return ch;
     }
@@ -198,7 +179,7 @@ int fgetc(FILE *stream) {
 }
 
 size_t fread(void *buf, size_t size, size_t count, FILE* stream) {
-    file_ptr *fp = (file_ptr *) stream;
+    file_impl *fp = (file_impl *) stream;
     int len = size * count;
     int ret = fp->read_fn(fn_arg, buf, len);
     return ret == len ? count : 0;
@@ -206,155 +187,27 @@ size_t fread(void *buf, size_t size, size_t count, FILE* stream) {
 
 void setbuf(FILE* fp, char* buf) {}
 
-// tfp_vfprintf implementation
-
-struct file_putp {
-    FILE *fp;
-    int len;
-};
-
-static void file_putc(void *data, char ch) {
-    struct file_putp *putp = data;
-    if (fputc(ch, putp->fp) >= 0) {
-        ++putp->len;
-    }
-}
-
-int tfp_vfprintf(FILE *stream, const char *format, va_list arg) {
-    struct file_putp data;
-    data.fp = stream;
-    data.len = 0;
-    tfp_format(&data, &file_putc, format, arg);
-    return data.len;
-}
-
-// {s,f}printf family wrappers
-
-int vasprintf(char **strp, const char *fmt, va_list ap) {
-    int size = vsnprintf(NULL, 0, fmt, ap);
-    if (size >= 0) {
-        *strp = malloc(size + 1);
-        vsnprintf(*strp, size, fmt, ap);
-    }
-    return size;
-}
-
-int vsprintf(char *str, const char *fmt, va_list ap) {
-    file_ptr file;
-    buf_holder h;
-    h.begin = str;
-    h.end = NULL;
-    set_fp_buf(&file, &h);
-
-    int retval = vfprintf((FILE *) &file, fmt, ap);
-    if (retval > 0) {
-        str[retval] = '\0';
-    }
-    return retval;
-}
-
-int sprintf(char *str, const char *format, ...) {
-    va_list ap;
-    int retval;
-
-    va_start(ap, format);
-    retval = vsprintf(str, format, ap);
-    va_end(ap);
-    return retval;
-}
-
-int vsnprintf(char *str, size_t size, const char *fmt, va_list ap) {
-    file_ptr file;
-    buf_holder h;
-    h.begin = str;
-    h.end = str + size;
-    set_fp_buf(&file, &h);
-
-    int retval = vfprintf((FILE *) &file, fmt, ap);
-    if (retval > 0) {
-        str[MIN(size - 1, retval)] = '\0';
-    }
-    return retval;
-}
-
-int snprintf(char *str, size_t size, const char *format, ...) {
-    va_list ap;
-    int retval;
-
-    va_start(ap, format);
-    retval = vsnprintf(str, size, format, ap);
-    va_end(ap);
-    return retval;
-}
-
-int vprintf(const char *fmt, va_list args) {
-    return vfprintf(stdout, fmt, args);
-}
-
-int fprintf(FILE *stream, const char *fmt, ...) {
-    va_list args;
-    int ret;
-
-    va_start(args, fmt);
-    ret = vfprintf(stream, fmt, args);
-    va_end(args);
-    return ret;
-}
-
-int printf(const char *fmt, ...) {
-    va_list args;
-    int ret;
-
-    va_start(args, fmt);
-    ret = vfprintf(stdout, fmt, args);
-    va_end(args);
-    return ret;
-}
-
-// sscanf family
-
-int musl_vfscanf(FILE *f, const char *fmt, va_list ap);
-
-int vsscanf(const char *s, const char *fmt, va_list args) {
-    file_ptr file;
-    buf_holder h;
-    h.begin = (void *) s;
-    h.end = NULL;
-    set_fp_buf(&file, &h);
-    return musl_vfscanf((FILE *) &file, fmt, args);
-}
-
-int sscanf(const char *str, const char *format, ...) {
-    va_list ap;
-    int retval;
-
-    va_start(ap, format);
-    retval = vsscanf(str, format, ap);
-    va_end(ap);
-    return retval;
-}
-
 // Internal functions for musl_vfscanf
-// We only support buffer FILE pointers
+// For now we only support buffer FILE pointers
 
 void shlim(FILE *f, off_t lim) {
-    file_ptr *fp = (file_ptr *) f;
+    file_impl *fp = (file_impl *) f;
     fp->buf->cnt = 0;
 }
 
 int shgetc(FILE *f) {
-    file_ptr *fp = (file_ptr *) f;
+    file_impl *fp = (file_impl *) f;
     ++fp->buf->cnt;
     return *(const uint8_t *)(fp->buf->begin++);
 }
 
 size_t shcnt(FILE *f) {
-    file_ptr *fp = (file_ptr *) f;
+    file_impl *fp = (file_impl *) f;
     return fp->buf->cnt;
 }
 
 void shunget(FILE *f) {
-    file_ptr *fp = (file_ptr *) f;
+    file_impl *fp = (file_impl *) f;
     --fp->buf->begin;
 }
 
