@@ -21,18 +21,13 @@ LOCAL_SRC_FILES := \
     misc.c \
     stdio.c \
     syscalls.c \
-    bionic/upstream-openbsd/getenv.c \
-    bionic/upstream-openbsd/setenv.c \
-    bionic/upstream-openbsd/strlcpy.c \
+    tinystdio/tinystdio.c \
     bionic/dirent.cpp \
     bionic/strerror.cpp \
     bionic/syscall-$(TARGET_ARCH).S \
-    musl/strcasecmp.c \
-    musl/strspn.c \
-    musl/strtok_r.c \
-    musl/memmem.c \
-    musl/qsort.c \
-    musl/vfprintf.c \
-    tinystdio/tinystdio.c
+    $(wildcard $(LOCAL_PATH)/musl/*.c) \
+    $(wildcard $(LOCAL_PATH)/bionic/*/*.c)
+
+LOCAL_SRC_FILES := $(LOCAL_SRC_FILES:$(LOCAL_PATH)/%=%)
 
 include $(BUILD_STATIC_LIBRARY)

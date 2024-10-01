@@ -10,18 +10,22 @@
 
 // Hand-rolled base FILE operations
 
+typedef struct buf_holder {
+    void *begin;
+    void *end;
+    size_t cnt;
+} buf_holder;
+
 typedef struct file_ptr {
     int fd;
-    void *cookie;
+    union {
+        void *cookie;
+        buf_holder *buf;
+    };
     int (*read_fn)(void*, char*, int);
     int (*write_fn)(void*, const char*, int);
     int (*close_fn)(void*);
 } file_ptr;
-
-typedef struct buf_holder {
-    void *begin;
-    void *end;
-} buf_holder;
 
 static int fp_read_fn(void *p, char *buf, int sz) {
     intptr_t fd = (intptr_t) p;
@@ -78,7 +82,7 @@ static void set_fp_fd(file_ptr *fp, int fd) {
 
 static void set_fp_buf(file_ptr *fp, buf_holder *h) {
     fp->fd = -1;
-    fp->cookie = h;
+    fp->buf = h;
     fp->read_fn = buf_read_fn;
     fp->write_fn = buf_write_fn;
     fp->close_fn = NULL;
@@ -91,9 +95,9 @@ FILE* stdout = (FILE *) &__stdio_fp[1];
 FILE* stderr = (FILE *) &__stdio_fp[2];
 
 void __init_stdio(void) {
-    set_fp_fd((file_ptr *) stdin, 0);
-    set_fp_fd((file_ptr *) stdout, 1);
-    set_fp_fd((file_ptr *) stderr, 2);
+    set_fp_fd(&__stdio_fp[0], 0);
+    set_fp_fd(&__stdio_fp[1], 1);
+    set_fp_fd(&__stdio_fp[2], 2);
 }
 
 FILE *fopen(const char *path, const char *mode) {
@@ -224,7 +228,7 @@ int tfp_vfprintf(FILE *stream, const char *format, va_list arg) {
     return data.len;
 }
 
-// {s,f}printf and sscanf family wrappers
+// {s,f}printf family wrappers
 
 int vasprintf(char **strp, const char *fmt, va_list ap) {
     int size = vsnprintf(NULL, 0, fmt, ap);
@@ -307,6 +311,19 @@ int printf(const char *fmt, ...) {
     return ret;
 }
 
+// sscanf family
+
+int musl_vfscanf(FILE *f, const char *fmt, va_list ap);
+
+int vsscanf(const char *s, const char *fmt, va_list args) {
+    file_ptr file;
+    buf_holder h;
+    h.begin = (void *) s;
+    h.end = NULL;
+    set_fp_buf(&file, &h);
+    return musl_vfscanf((FILE *) &file, fmt, args);
+}
+
 int sscanf(const char *str, const char *format, ...) {
     va_list ap;
     int retval;
@@ -315,6 +332,30 @@ int sscanf(const char *str, const char *format, ...) {
     retval = vsscanf(str, format, ap);
     va_end(ap);
     return retval;
+}
+
+// Internal functions for musl_vfscanf
+// We only support buffer FILE pointers
+
+void shlim(FILE *f, off_t lim) {
+    file_ptr *fp = (file_ptr *) f;
+    fp->buf->cnt = 0;
+}
+
+int shgetc(FILE *f) {
+    file_ptr *fp = (file_ptr *) f;
+    ++fp->buf->cnt;
+    return *(const uint8_t *)(fp->buf->begin++);
+}
+
+size_t shcnt(FILE *f) {
+    file_ptr *fp = (file_ptr *) f;
+    return fp->buf->cnt;
+}
+
+void shunget(FILE *f) {
+    file_ptr *fp = (file_ptr *) f;
+    --fp->buf->begin;
 }
 
 // Original source: https://github.com/freebsd/freebsd/blob/master/contrib/file/src/getline.c
