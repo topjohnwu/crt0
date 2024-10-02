@@ -1,28 +1,16 @@
 #include <stdlib.h>
 
 #include "stdio_impl.h"
-#include "tinystdio/tinystdio.h"
+#include "printf/printf.h"
 
-// tfp_vfprintf implementation
+// tiny_vfprintf implementation
 
-struct file_putp {
-    FILE *fp;
-    int len;
-};
-
-static void file_putc(void *data, char ch) {
-    struct file_putp *putp = data;
-    if (fputc(ch, putp->fp) >= 0) {
-        ++putp->len;
-    }
+static void fct_putchar(char ch, void *p) {
+    fputc(ch, (FILE *) p);
 }
 
-int tfp_vfprintf(FILE *stream, const char *format, va_list arg) {
-    struct file_putp data;
-    data.fp = stream;
-    data.len = 0;
-    tfp_format(&data, &file_putc, format, arg);
-    return data.len;
+int tiny_vfprintf(FILE *stream, const char *format, va_list arg) {
+    return vfctprintf(fct_putchar, stream, format, arg);
 }
 
 // {s,f}printf family wrappers

@@ -22,7 +22,7 @@ LOCAL_SRC_FILES := \
     misc.c \
     stdio.c \
     syscalls.c \
-    tinystdio/tinystdio.c \
+    printf/printf.c \
     bionic/dirent.cpp \
     bionic/strerror.cpp \
     bionic/syscall-$(TARGET_ARCH).S \
