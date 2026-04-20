@@ -203,11 +203,3 @@ int getpagesize() {
     }
     return sz;
 }
-
-// Stack protector support
-
-uintptr_t __stack_chk_guard = 0;
-
-void __stack_chk_fail() {
-    abort();
-}
