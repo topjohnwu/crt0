@@ -2,7 +2,9 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <string.h>
+#include <errno.h>
 
 #include "stdio_impl.h"
 
@@ -125,8 +127,110 @@ FILE *funopen(const void* cookie,
     return (FILE *) fp;
 }
 
+typedef struct {
+    char **bufp;
+    size_t *sizep;
+    char *buf;
+    size_t pos;
+    size_t cap;
+} memstream;
+
+static int memstream_read_fn(void *cookie, char *buf, int sz) {
+    errno = EBADF;
+    return -1;
+}
+
+static int memstream_write_fn(void *cookie, const char *buf, int sz) {
+    if (sz < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (sz == 0)
+        return 0;
+
+    memstream *m = cookie;
+
+    // Check for integer overflow: m->pos + sz + 1
+    if ((size_t) sz > SIZE_MAX - 1 - m->pos) {
+        errno = EFBIG;
+        return -1;
+    }
+
+    size_t required = m->pos + (size_t) sz + 1;
+    if (required > m->cap) {
+        size_t new_cap = (m->cap > SIZE_MAX / 2) ? SIZE_MAX : m->cap * 2;
+        if (new_cap < required)
+            new_cap = required;
+        char *new_buf = realloc(m->buf, new_cap);
+        if (!new_buf)
+            return -1;
+        m->buf = new_buf;
+        m->cap = new_cap;
+    }
+
+    memcpy(m->buf + m->pos, buf, sz);
+    m->pos += sz;
+    m->buf[m->pos] = '\0';
+
+    *m->bufp = m->buf;
+    *m->sizep = m->pos;
+
+    return sz;
+}
+
+static int memstream_close_fn(void *cookie) {
+    memstream *m = cookie;
+    char *trimmed = realloc(m->buf, m->pos + 1);
+    if (trimmed)
+        m->buf = trimmed;
+    m->buf[m->pos] = '\0';
+
+    *m->bufp = m->buf;
+    *m->sizep = m->pos;
+    free(m);
+    return 0;
+}
+
+FILE *open_memstream(char **bufp, size_t *sizep) {
+    if (!bufp || !sizep) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    memstream *m = malloc(sizeof(memstream));
+    if (!m)
+        return NULL;
+
+    m->cap = 64;
+    m->buf = malloc(m->cap);
+    if (!m->buf) {
+        free(m);
+        return NULL;
+    }
+    m->buf[0] = '\0';
+    m->pos = 0;
+    m->bufp = bufp;
+    m->sizep = sizep;
+
+    FILE *fp = funopen(m, memstream_read_fn, memstream_write_fn, NULL, memstream_close_fn);
+    if (!fp) {
+        free(m->buf);
+        free(m);
+        return NULL;
+    }
+
+    *bufp = m->buf;
+    *sizep = 0;
+
+    return fp;
+}
+
 int ferror(FILE *stream) {
     // We don't report any errors
+    return 0;
+}
+
+int fflush(FILE *stream) {
     return 0;
 }
 

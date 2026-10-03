@@ -1,3 +1,5 @@
+#undef _FILE_OFFSET_BITS
+
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/statfs.h>
